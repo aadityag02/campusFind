@@ -1,0 +1,6 @@
+node_modules/
+.env
+campusfind.db
+sessions.db
+public/uploads/
+*.log
