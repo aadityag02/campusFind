@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CampusFind — Report Item</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav>
+  <a href="/dashboard" class="nav-logo">Campus<span>Find</span></a>
+  <div class="nav-links">
+    <a href="/dashboard">Home</a>
+    <a href="/report" class="active">Report Item</a>
+    <a href="/browse">Browse</a>
+    <a href="/match">Image Match</a>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="nav-user" id="navUser"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <h1 id="pageTitle">Report an Item</h1>
+    <p id="pageDesc">Fill in the details below to help reunite the item with its owner</p>
+  </div>
+
+  <!-- Type Toggle -->
+  <div style="display:flex;gap:12px;margin-bottom:32px">
+    <button class="btn" id="btnLost" onclick="setType('lost')" style="flex:1;font-size:16px">
+      🔍 I Lost Something
+    </button>
+    <button class="btn" id="btnFound" onclick="setType('found')" style="flex:1;font-size:16px">
+      📦 I Found Something
+    </button>
+  </div>
+
+  <div class="alert alert-error" id="alertErr"></div>
+  <div class="alert alert-success" id="alertOk"></div>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px">
+    <div class="grid-2">
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Item Name / Title *</label>
+        <input type="text" id="title" placeholder="e.g. Blue JanSport backpack, Apple AirPods Pro">
+      </div>
+
+      <div class="form-group">
+        <label>Category *</label>
+        <select id="category">
+          <option value="">Select category...</option>
+          <option value="Electronics">Electronics (phone, laptop, earphones)</option>
+          <option value="ID & Cards">ID & Cards (student ID, library card)</option>
+          <option value="Bags & Accessories">Bags & Accessories</option>
+          <option value="Clothing">Clothing & Footwear</option>
+          <option value="Stationery">Stationery & Books</option>
+          <option value="Keys">Keys & Keychains</option>
+          <option value="Water Bottle">Water Bottle & Tiffin</option>
+          <option value="Wallet & Money">Wallet & Money</option>
+          <option value="Sports Equipment">Sports Equipment</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Location *</label>
+        <select id="location">
+          <option value="">Where was it lost/found?</option>
+          <option value="Academic Block">Academic Block</option>
+          <option value="Library">Library (CKD Building)</option>
+          <option value="Canteen / Mess">Canteen / Mess</option>
+          <option value="Boys Hostel">Boys Hostel</option>
+          <option value="Girls Hostel">Girls Hostel</option>
+          <option value="Sports Complex">Sports Complex / Ground</option>
+          <option value="Main Gate / Security">Main Gate / Security</option>
+          <option value="Auditorium">Auditorium / Seminar Hall</option>
+          <option value="Lab / Workshop">Lab / Workshop</option>
+          <option value="Parking Area">Parking Area</option>
+          <option value="Bus Stop">Bus Stop</option>
+          <option value="Other">Other location on campus</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Date Lost / Found *</label>
+        <input type="date" id="date_occurred" max="">
+      </div>
+
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Description</label>
+        <textarea id="description" placeholder="Describe the item in detail — color, brand, any identifying marks, engravings, stickers, etc. The more detail, the better the chances of recovery."></textarea>
+      </div>
+
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Photo (optional but recommended)</label>
+        <div class="upload-zone" onclick="document.getElementById('imageInput').click()">
+          <input type="file" id="imageInput" accept="image/*" onchange="previewImage(event)">
+          <div class="upload-icon">📷</div>
+          <div style="font-size:14px">Click to upload photo &nbsp;·&nbsp; JPG, PNG up to 5MB</div>
+          <div class="text-muted" style="font-size:12px;margin-top:4px">Adding a photo enables AI-powered matching</div>
+        </div>
+        <img id="imgPreview" class="img-preview" alt="Preview">
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="submit()" id="submitBtn" style="margin-top:8px">
+      <span id="submitText">Submit Report</span>
+      <div class="spinner" id="submitSpinner"></div>
+    </button>
+  </div>
+</div>
+
+<script>
+  let currentType = 'lost';
+
+  async function init() {
+    const me = await fetch('/auth/me').then(r => r.json());
+    if (!me.loggedIn) return window.location.href = '/';
+    document.getElementById('navUser').textContent = me.name;
+
+    // Set max date to today
+    document.getElementById('date_occurred').max = new Date().toISOString().split('T')[0];
+
+    // Read type from URL
+    const params = new URLSearchParams(window.location.search);
+    const type = params.get('type');
+    setType(type === 'found' ? 'found' : 'lost');
+  }
+
+  function setType(type) {
+    currentType = type;
+    const btnLost = document.getElementById('btnLost');
+    const btnFound = document.getElementById('btnFound');
+    const title = document.getElementById('pageTitle');
+    const desc = document.getElementById('pageDesc');
+
+    if (type === 'lost') {
+      btnLost.className = 'btn btn-lost';
+      btnFound.className = 'btn btn-ghost';
+      title.textContent = 'Report a Lost Item';
+      desc.textContent = 'Describe what you lost and where — the community will help you find it';
+    } else {
+      btnFound.className = 'btn btn-found';
+      btnLost.className = 'btn btn-ghost';
+      title.textContent = 'Report a Found Item';
+      desc.textContent = 'Tell us what you found and where — let\'s get it back to its owner';
+    }
+  }
+
+  function previewImage(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const preview = document.getElementById('imgPreview');
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+  }
+
+  async function submit() {
+    const title = document.getElementById('title').value.trim();
+    const category = document.getElementById('category').value;
+    const location = document.getElementById('location').value;
+    const date_occurred = document.getElementById('date_occurred').value;
+    const description = document.getElementById('description').value.trim();
+    const image = document.getElementById('imageInput').files[0];
+    const spinner = document.getElementById('submitSpinner');
+    const text = document.getElementById('submitText');
+
+    if (!title) return showAlert('err', 'Please enter the item name.');
+    if (!category) return showAlert('err', 'Please select a category.');
+    if (!location) return showAlert('err', 'Please select a location.');
+    if (!date_occurred) return showAlert('err', 'Please select the date.');
+
+    spinner.style.display = 'block'; text.style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('type', currentType);
+    formData.append('title', title);
+    formData.append('category', category);
+    formData.append('location', location);
+    formData.append('date_occurred', date_occurred);
+    formData.append('description', description);
+    if (image) formData.append('image', image);
+
+    const res = await fetch('/items/report', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    spinner.style.display = 'none'; text.style.display = 'block';
+
+    if (data.success) {
+      showAlert('ok', `Item reported successfully! ${image ? 'Image uploaded and processed for AI matching.' : ''}`);
+      document.getElementById('title').value = '';
+      document.getElementById('description').value = '';
+      document.getElementById('category').value = '';
+      document.getElementById('location').value = '';
+      document.getElementById('date_occurred').value = '';
+      document.getElementById('imgPreview').style.display = 'none';
+      document.getElementById('imageInput').value = '';
+    } else {
+      showAlert('err', data.message);
+    }
+  }
+
+  function showAlert(type, msg) {
+    const err = document.getElementById('alertErr');
+    const ok = document.getElementById('alertOk');
+    err.style.display = 'none'; ok.style.display = 'none';
+    if (type === 'err') { err.textContent = msg; err.style.display = 'block'; }
+    else { ok.textContent = msg; ok.style.display = 'block'; }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function logout() {
+    await fetch('/auth/logout', { method: 'POST' });
+    window.location.href = '/';
+  }
+
+  init();
+</script>
+</body>
+</html>
