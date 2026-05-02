@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CampusFind — Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav>
+  <a href="/dashboard" class="nav-logo">Campus<span>Find</span></a>
+  <div class="nav-links">
+    <a href="/dashboard" class="active">Home</a>
+    <a href="/report">Report Item</a>
+    <a href="/browse">Browse</a>
+    <a href="/match">Image Match</a>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="nav-user" id="navUser"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<div class="container-wide">
+  <div class="page-header" style="margin-bottom:40px">
+    <h1 id="greeting">Welcome back</h1>
+    <p>What would you like to do today?</p>
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="grid-2" style="margin-bottom:40px">
+    <a href="/report?type=lost" class="card" style="text-decoration:none;border-color:rgba(255,107,74,0.3);cursor:pointer">
+      <div style="font-size:36px;margin-bottom:12px">🔍</div>
+      <h2 style="font-family:'Instrument Serif',serif;font-weight:400;font-size:24px;color:var(--lost)">Lost Something?</h2>
+      <p class="text-muted" style="margin-top:6px">Report a lost item so others can help you find it</p>
+      <div class="btn btn-lost" style="margin-top:20px;width:fit-content">Report Lost Item →</div>
+    </a>
+
+    <a href="/report?type=found" class="card" style="text-decoration:none;border-color:rgba(62,207,142,0.3);cursor:pointer">
+      <div style="font-size:36px;margin-bottom:12px">🎒</div>
+      <h2 style="font-family:'Instrument Serif',serif;font-weight:400;font-size:24px;color:var(--found)">Found Something?</h2>
+      <p class="text-muted" style="margin-top:6px">Post a found item to help reunite it with its owner</p>
+      <div class="btn btn-found" style="margin-top:20px;width:fit-content">Report Found Item →</div>
+    </a>
+  </div>
+
+  <!-- Image Match Banner -->
+  <a href="/match" class="card" style="text-decoration:none;display:block;margin-bottom:40px;background:linear-gradient(135deg,#1a1e28,#13161d);border-color:rgba(79,142,255,0.3)">
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div style="font-size:48px">🤖</div>
+      <div style="flex:1">
+        <h3 style="font-size:18px;font-weight:600;margin-bottom:4px">AI Image Matching</h3>
+        <p class="text-muted">Upload a photo of what you lost or found — our GPT-4o powered engine will find the closest matches in the database instantly.</p>
+      </div>
+      <div class="btn btn-primary" style="width:fit-content;white-space:nowrap">Try Image Match →</div>
+    </div>
+  </a>
+
+  <!-- Recent Items -->
+  <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+    <h2 style="font-family:'Instrument Serif',serif;font-weight:400;font-size:22px">Recent Reports</h2>
+    <a href="/browse" style="color:var(--accent);font-size:14px;text-decoration:none">View all →</a>
+  </div>
+  <div class="grid-3" id="recentItems">
+    <div class="text-muted" style="grid-column:1/-1;padding:24px 0">Loading recent items...</div>
+  </div>
+
+  <!-- My Items -->
+  <div style="margin-top:48px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+    <h2 style="font-family:'Instrument Serif',serif;font-weight:400;font-size:22px">My Reports</h2>
+  </div>
+  <div class="grid-3" id="myItems">
+    <div class="text-muted" style="grid-column:1/-1;padding:24px 0">Loading your items...</div>
+  </div>
+</div>
+
+<script>
+  async function init() {
+    const me = await fetch('/auth/me').then(r => r.json());
+    if (!me.loggedIn) return window.location.href = '/';
+    document.getElementById('navUser').textContent = me.name;
+    document.getElementById('greeting').textContent = `Welcome back, ${me.name.split(' ')[0]}`;
+
+    loadRecent();
+    loadMine();
+  }
+
+  async function loadRecent() {
+    const data = await fetch('/items/browse').then(r => r.json());
+    const el = document.getElementById('recentItems');
+    if (!data.items || data.items.length === 0) {
+      el.innerHTML = '<div class="text-muted" style="grid-column:1/-1;padding:24px 0">No items reported yet. Be the first!</div>';
+      return;
+    }
+    el.innerHTML = data.items.slice(0, 6).map(renderCard).join('');
+  }
+
+  async function loadMine() {
+    const data = await fetch('/items/mine').then(r => r.json());
+    const el = document.getElementById('myItems');
+    if (!data.items || data.items.length === 0) {
+      el.innerHTML = '<div class="text-muted" style="grid-column:1/-1;padding:24px 0">You haven\'t reported any items yet.</div>';
+      return;
+    }
+    el.innerHTML = data.items.map(item => renderCard(item, true)).join('');
+  }
+
+  function renderCard(item, showResolve = false) {
+    const badgeClass = item.status === 'resolved' ? 'badge-resolved' : `badge-${item.type}`;
+    const badgeText = item.status === 'resolved' ? 'Resolved' : item.type.charAt(0).toUpperCase() + item.type.slice(1);
+    return `
+      <div class="card">
+        ${item.image_path ? `<img src="${item.image_path}" class="item-img" alt="${item.title}">` : `<div class="item-img" style="display:flex;align-items:center;justify-content:center;font-size:40px;">${item.type === 'lost' ? '🔍' : '📦'}</div>`}
+        <span class="badge ${badgeClass}">${badgeText}</span>
+        <div class="item-title">${item.title}</div>
+        <div class="item-meta">📍 ${item.location} &nbsp;·&nbsp; ${item.category}</div>
+        <div class="item-meta" style="margin-top:4px">📅 ${item.date_occurred}</div>
+        ${item.description ? `<div class="text-muted" style="font-size:13px;margin-top:8px;line-height:1.5">${item.description.slice(0,80)}${item.description.length > 80 ? '…' : ''}</div>` : ''}
+        ${showResolve && item.status === 'active' ? `<button class="btn btn-ghost btn-sm" style="margin-top:12px;width:100%" onclick="resolve(${item.id})">Mark Resolved ✓</button>` : ''}
+      </div>`;
+  }
+
+  async function resolve(id) {
+    if (!confirm('Mark this item as resolved/returned?')) return;
+    const data = await fetch(`/items/resolve/${id}`, { method: 'POST' }).then(r => r.json());
+    if (data.success) loadMine();
+  }
+
+  async function logout() {
+    await fetch('/auth/logout', { method: 'POST' });
+    window.location.href = '/';
+  }
+
+  init();
+</script>
+</body>
+</html>
