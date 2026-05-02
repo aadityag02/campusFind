@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CampusFind — AI Image Match</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<nav>
+  <a href="/dashboard" class="nav-logo">Campus<span>Find</span></a>
+  <div class="nav-links">
+    <a href="/dashboard">Home</a>
+    <a href="/report">Report Item</a>
+    <a href="/browse">Browse</a>
+    <a href="/match" class="active">Image Match</a>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="nav-user" id="navUser"></span>
+    <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+  </div>
+</nav>
+
+<div class="container">
+  <div class="page-header">
+    <h1>AI Image Matching</h1>
+    <p>Upload a photo — GPT-4o will analyze and find the closest matches in the database</p>
+  </div>
+
+  <!-- Upload Section -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px;margin-bottom:32px">
+    <div class="form-group">
+      <label>Upload Image of Item</label>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('matchImg').click()">
+        <input type="file" id="matchImg" accept="image/*" onchange="previewMatch(event)">
+        <div class="upload-icon" id="uploadIcon">🤖</div>
+        <div id="uploadText" style="font-size:14px">Click to upload or drag and drop</div>
+        <div class="text-muted" style="font-size:12px;margin-top:4px">JPG, PNG up to 5MB</div>
+      </div>
+      <img id="matchPreview" class="img-preview" alt="Preview">
+    </div>
+
+    <div class="form-group">
+      <label>Search In</label>
+      <div style="display:flex;gap:12px">
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);cursor:pointer">
+          <input type="radio" name="searchType" value="both" checked style="width:auto"> Both Lost & Found
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);cursor:pointer">
+          <input type="radio" name="searchType" value="found" style="width:auto"> Found items only
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:14px;color:var(--text);cursor:pointer">
+          <input type="radio" name="searchType" value="lost" style="width:auto"> Lost items only
+        </label>
+      </div>
+    </div>
+
+    <div class="alert alert-error" id="alertErr"></div>
+
+    <button class="btn btn-primary" onclick="runMatch()" id="matchBtn">
+      <span id="matchText">🔍 Find Matches</span>
+      <div class="spinner" id="matchSpinner"></div>
+    </button>
+  </div>
+
+  <!-- Results -->
+  <div id="resultsSection" style="display:none">
+    <div style="margin-bottom:20px">
+      <h2 style="font-family:'Instrument Serif',serif;font-weight:400;font-size:22px;margin-bottom:8px">Match Results</h2>
+      <div style="background:var(--surface2);border-radius:12px;padding:16px;font-size:14px;color:var(--muted);border:1px solid var(--border)">
+        <strong style="color:var(--text)">AI Description of your item:</strong>
+        <div id="aiDescription" style="margin-top:6px;line-height:1.6"></div>
+      </div>
+    </div>
+
+    <div id="matchCount" class="text-muted" style="font-size:14px;margin-bottom:16px"></div>
+    <div class="grid-3" id="matchResults"></div>
+  </div>
+
+  <!-- Empty state before search -->
+  <div id="emptyState" style="text-align:center;padding:60px 0;color:var(--muted)">
+    <div style="font-size:64px;margin-bottom:16px">🤖</div>
+    <h3 style="font-family:'Instrument Serif',serif;font-weight:400;font-size:22px;color:var(--text);margin-bottom:8px">How it works</h3>
+    <p style="max-width:400px;margin:0 auto;line-height:1.7">Upload a photo of the item you lost or found. GPT-4o analyzes the image and compares it against all items in our database, returning the closest visual and descriptive matches ranked by similarity score.</p>
+  </div>
+</div>
+
+<script>
+  async function init() {
+    const me = await fetch('/auth/me').then(r => r.json());
+    if (!me.loggedIn) return window.location.href = '/';
+    document.getElementById('navUser').textContent = me.name;
+  }
+
+  function previewMatch(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const preview = document.getElementById('matchPreview');
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = 'block';
+    document.getElementById('uploadIcon').textContent = '✅';
+    document.getElementById('uploadText').textContent = file.name;
+  }
+
+  async function runMatch() {
+    const file = document.getElementById('matchImg').files[0];
+    const searchType = document.querySelector('input[name="searchType"]:checked').value;
+    const spinner = document.getElementById('matchSpinner');
+    const text = document.getElementById('matchText');
+    const err = document.getElementById('alertErr');
+
+    if (!file) { err.textContent = 'Please upload an image first.'; err.style.display = 'block'; return; }
+    err.style.display = 'none';
+
+    spinner.style.display = 'block'; text.style.display = 'none';
+    document.getElementById('matchBtn').disabled = true;
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('resultsSection').style.display = 'none';
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('search_type', searchType);
+
+    try {
+      const res = await fetch('/match/search', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      spinner.style.display = 'none'; text.style.display = 'block';
+      document.getElementById('matchBtn').disabled = false;
+
+      if (!data.success) {
+        err.textContent = data.message;
+        err.style.display = 'block';
+        document.getElementById('emptyState').style.display = 'block';
+        return;
+      }
+
+      document.getElementById('aiDescription').textContent = data.uploadedDescription || 'Analysis complete.';
+      document.getElementById('resultsSection').style.display = 'block';
+
+      const matchCount = document.getElementById('matchCount');
+      const results = document.getElementById('matchResults');
+
+      if (!data.matches || data.matches.length === 0) {
+        matchCount.textContent = 'No strong matches found in the database.';
+        results.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">
+          <div style="font-size:36px;margin-bottom:12px">😕</div>
+          <div>No items with similarity score above 30% were found.</div>
+          <div style="margin-top:8px;font-size:13px">Try reporting the item directly — someone may find it later.</div>
+          <a href="/report" class="btn btn-primary" style="margin-top:16px;width:fit-content">Report This Item</a>
+        </div>`;
+        return;
+      }
+
+      matchCount.textContent = `${data.matches.length} match${data.matches.length !== 1 ? 'es' : ''} found, ranked by similarity`;
+      results.innerHTML = data.matches.map(renderMatchCard).join('');
+
+      // Animate score bars
+      setTimeout(() => {
+        document.querySelectorAll('.score-fill').forEach(el => {
+          el.style.width = el.dataset.score + '%';
+        });
+      }, 100);
+
+    } catch (e) {
+      spinner.style.display = 'none'; text.style.display = 'block';
+      document.getElementById('matchBtn').disabled = false;
+      err.textContent = 'Something went wrong. Please try again.';
+      err.style.display = 'block';
+    }
+  }
+
+  function renderMatchCard(item) {
+    const score = item.score || 0;
+    const scoreColor = score >= 70 ? 'var(--found)' : score >= 50 ? 'var(--accent)' : 'var(--muted)';
+    return `
+      <div class="card">
+        ${item.image_path
+          ? `<img src="${item.image_path}" class="item-img" alt="${item.title}">`
+          : `<div class="item-img" style="display:flex;align-items:center;justify-content:center;font-size:40px;background:var(--surface2)">${item.type === 'lost' ? '🔍' : '📦'}</div>`}
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="badge badge-${item.type}">${item.type}</span>
+          <span style="font-size:14px;font-weight:700;color:${scoreColor}">${score}% match</span>
+        </div>
+        <div class="score-bar" style="margin:8px 0">
+          <div class="score-fill" data-score="${score}" style="width:0%"></div>
+        </div>
+        <div class="item-title">${item.title}</div>
+        <div class="item-meta">📁 ${item.category} &nbsp;·&nbsp; 📍 ${item.location}</div>
+        <div class="item-meta">📅 ${item.date_occurred}</div>
+        ${item.reason ? `<div class="text-muted" style="font-size:12px;margin-top:8px;font-style:italic">"${item.reason}"</div>` : ''}
+      </div>`;
+  }
+
+  async function logout() {
+    await fetch('/auth/logout', { method: 'POST' });
+    window.location.href = '/';
+  }
+
+  init();
+</script>
+</body>
+</html>
