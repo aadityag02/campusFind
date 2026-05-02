@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CampusFind — Register</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">Campus<span>Find</span></div>
+    <div class="auth-sub">Create your account — @iitrpr.ac.in only</div>
+
+    <div class="alert alert-error" id="alert"></div>
+
+    <div class="form-group">
+      <label>Full Name</label>
+      <input type="text" id="name" placeholder="Your full name">
+    </div>
+    <div class="form-group">
+      <label>Institute Email</label>
+      <input type="email" id="email" placeholder="yourname@iitrpr.ac.in">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Min 6 characters">
+    </div>
+
+    <button class="btn btn-primary" onclick="register()" id="regBtn">
+      <span id="regText">Create Account</span>
+      <div class="spinner" id="regSpinner"></div>
+    </button>
+
+    <p class="text-muted text-center mt-16">
+      Already have an account? <a href="/" style="color: var(--accent)">Sign in</a>
+    </p>
+  </div>
+</div>
+
+<script>
+  async function register() {
+    const name = document.getElementById('name').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const spinner = document.getElementById('regSpinner');
+    const text = document.getElementById('regText');
+
+    if (!name || !email || !password) return showAlert('Please fill all fields.');
+    if (!email.endsWith('@iitrpr.ac.in')) return showAlert('Only @iitrpr.ac.in email addresses are allowed.');
+    if (password.length < 6) return showAlert('Password must be at least 6 characters.');
+
+    spinner.style.display = 'block'; text.style.display = 'none';
+
+    const res = await fetch('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
+    const data = await res.json();
+
+    spinner.style.display = 'none'; text.style.display = 'block';
+
+    if (data.success) {
+      localStorage.setItem('pendingEmail', email);
+      window.location.href = '/verify';
+    } else {
+      showAlert(data.message);
+    }
+  }
+
+  function showAlert(msg) {
+    const el = document.getElementById('alert');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
+</script>
+</body>
+</html>
